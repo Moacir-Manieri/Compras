@@ -36,6 +36,33 @@ async function apiGet(aba) {
   } catch(e) { return []; }
 }
 
+// Versão diagnóstica usada pelo "Testar conexão" — retorna detalhes do erro
+async function apiGetDiag(aba) {
+  if (!API_URL) return { ok: false, motivo: 'URL não configurada' };
+  if (API_URL.includes('/a/macros/')) {
+    return { ok: false, motivo: 'A URL é restrita ao domínio (formato /a/macros/dominio/). Reimplante o Apps Script como "Qualquer pessoa" para obter uma URL pública /macros/s/...' };
+  }
+  try {
+    const res = await fetch(`${API_URL}?aba=${aba}`, { redirect: 'follow' });
+    const txt = await res.text();
+    if (!res.ok) {
+      return { ok: false, motivo: `HTTP ${res.status} — ${txt.slice(0, 120)}` };
+    }
+    if (txt.trim().startsWith('<')) {
+      return { ok: false, motivo: 'A resposta veio como HTML (provavelmente página de login). Reimplante o Apps Script como "Qualquer pessoa".' };
+    }
+    try {
+      const data = JSON.parse(txt);
+      if (Array.isArray(data)) return { ok: true, dados: data };
+      return { ok: false, motivo: 'Resposta JSON não é uma lista: ' + txt.slice(0, 120) };
+    } catch (err) {
+      return { ok: false, motivo: 'Resposta não é JSON válido: ' + txt.slice(0, 120) };
+    }
+  } catch (e) {
+    return { ok: false, motivo: 'Erro de rede/CORS: ' + e.message };
+  }
+}
+
 async function apiPost(body) {
   if (!API_URL) return { ok: false, erro: 'API não configurada' };
   try {
@@ -310,13 +337,13 @@ async function testarAPI() {
   const el = document.getElementById('api-status');
   el.className = 'status-pill status-pend';
   el.textContent = '⬤  Testando...';
-  const dados = await apiGet('requisicoes');
-  if (dados !== null && Array.isArray(dados)) {
+  const r = await apiGetDiag('requisicoes');
+  if (r.ok) {
     el.className = 'status-pill status-ok';
-    el.textContent = `⬤  Conectado! ${dados.length} registros encontrados.`;
+    el.textContent = `⬤  Conectado! ${r.dados.length} registros encontrados.`;
   } else {
     el.className = 'status-pill status-err';
-    el.textContent = '⬤  Erro de conexão. Verifique a URL.';
+    el.textContent = '⬤  ' + r.motivo;
   }
 }
 

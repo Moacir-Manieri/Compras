@@ -184,8 +184,18 @@
         </div>
 
         <div class="config-card">
-          <div class="config-title">Código do Apps Script</div>
-          <div class="config-sub">Cole o conteúdo do arquivo <strong>Code.gs</strong> em <strong>Extensões → Apps Script → Code.gs</strong> na sua planilha Google Sheets e publique como Web App.</div>
+          <div class="config-title">Como implantar o Apps Script (passo a passo)</div>
+          <div class="config-sub">Se a URL conter <code>/a/macros/seu-dominio.com/</code> ela é <strong>restrita ao domínio</strong> e o front-end <strong>não vai funcionar</strong> sem login. Reimplante seguindo:</div>
+          <ol style="font-size:13px;line-height:1.8;color:var(--text2);padding-left:20px">
+            <li>Cole o conteúdo de <strong>Code.gs</strong> em <strong>Extensões → Apps Script → Code.gs</strong></li>
+            <li>Substitua <code>COLE_O_ID_DA_SUA_PLANILHA</code> pelo ID da sua planilha (vem na URL da planilha)</li>
+            <li>Clique em <strong>Implantar → Nova implantação</strong></li>
+            <li>Tipo: <strong>Aplicativo da Web</strong></li>
+            <li>Executar como: <strong>Eu</strong> (seu e-mail)</li>
+            <li>Quem tem acesso: <strong>Qualquer pessoa</strong> (NÃO escolha "Apenas no domínio")</li>
+            <li>Copie a URL gerada — deve começar com <code>https://script.google.com/macros/s/...</code> (sem <code>/a/macros/</code>)</li>
+            <li>Cole essa URL no campo acima e clique em <strong>Testar conexão</strong></li>
+          </ol>
         </div>
 
         <div class="config-card">
