@@ -1,7 +1,8 @@
 // ══════════════════════════════════════════
 //  ESTADO GLOBAL
 // ══════════════════════════════════════════
-let API_URL = localStorage.getItem('comprafacil_api') || '';
+const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbxqVxhnvfEvZ7VOlsAh0UJwgS8LmVS3F_Vvty7DvTNGI5Zstr0BOgEJZX9Fmv64MtB4/exec';
+let API_URL = localStorage.getItem('comprafacil_api') || DEFAULT_API_URL;
 let todosReqs = [];
 let proxId = 1;
 
