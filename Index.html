@@ -2,10 +2,10 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<base target="_top">
 <title>CompraFácil</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
+<?!= include('Stylesheet'); ?>
 </head>
 <body>
 
@@ -20,7 +20,7 @@
         </div>
         <div>
           <div class="logo-name">CompraFácil</div>
-          <div class="logo-tag">Google Workspace</div>
+          <div class="logo-tag">mrlit.com.br</div>
         </div>
       </div>
     </div>
@@ -36,7 +36,7 @@
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
           Nova requisição
         </button>
-        <button class="nav-item" onclick="showPage('aprovacao',this)">
+        <button class="nav-item" id="nav-aprov-btn" onclick="showPage('aprovacao',this)">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
           Aprovações
           <span class="nav-badge" id="nav-badge">0</span>
@@ -46,20 +46,13 @@
           Histórico
         </button>
       </div>
-      <div class="nav-group">
-        <div class="nav-section">Sistema</div>
-        <button class="nav-item" onclick="showPage('config',this)">
-          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>
-          Configurar API
-        </button>
-      </div>
     </div>
 
     <div class="sidebar-user">
-      <div class="avatar" id="user-avatar">?</div>
+      <div class="avatar" id="user-avatar">…</div>
       <div>
-        <div class="u-name" id="user-name">Não configurado</div>
-        <div class="u-role" id="user-role">Configure a API →</div>
+        <div class="u-name" id="user-name">Carregando...</div>
+        <div class="u-role" id="user-role">@mrlit.com.br</div>
       </div>
     </div>
   </div>
@@ -79,9 +72,9 @@
       <!-- ── DASHBOARD ── -->
       <div class="page active" id="page-dashboard">
         <div class="metrics">
-          <div class="metric"><div class="metric-label">Total do mês</div><div class="metric-val" id="m-total">—</div><div class="metric-sub" id="m-total-sub">carregando...</div></div>
-          <div class="metric"><div class="metric-label">Pendentes</div><div class="metric-val" id="m-pend">—</div><div class="metric-sub warn" id="m-pend-sub">aguardando aprovação</div></div>
-          <div class="metric"><div class="metric-label">Aprovadas</div><div class="metric-val" id="m-aprov">—</div><div class="metric-sub up" id="m-aprov-sub">este mês</div></div>
+          <div class="metric"><div class="metric-label">Total do mês</div><div class="metric-val" id="m-total">—</div><div class="metric-sub">criadas em <span id="m-mes">—</span></div></div>
+          <div class="metric"><div class="metric-label">Pendentes</div><div class="metric-val" id="m-pend">—</div><div class="metric-sub warn">aguardando aprovação</div></div>
+          <div class="metric"><div class="metric-label">Aprovadas</div><div class="metric-val" id="m-aprov">—</div><div class="metric-sub up">total acumulado</div></div>
           <div class="metric"><div class="metric-label">Valor total</div><div class="metric-val" id="m-valor">—</div><div class="metric-sub up">requisições aprovadas</div></div>
         </div>
         <div class="loading show" id="dash-loading"><div class="spin"></div>Carregando dados do Google Sheets...</div>
@@ -105,8 +98,7 @@
           <div class="form-section">
             <div class="form-section-label">Dados da requisição</div>
             <div class="form-grid">
-              <div class="fg"><label>Seu nome completo</label><input id="f-nome" placeholder="Ex: Ana Martins"/></div>
-              <div class="fg"><label>Seu e-mail (@empresa.com)</label><input id="f-email" type="email" placeholder="ana@empresa.com"/></div>
+              <div class="fg"><label>Seu nome (como aparecerá)</label><input id="f-nome" placeholder="Ex: Ana Martins"/></div>
               <div class="fg"><label>Título da requisição</label><input id="f-titulo" placeholder="Ex: Notebooks Dell i5 para TI"/></div>
               <div class="fg"><label>Departamento</label>
                 <select id="f-dept"><option>TI</option><option>RH</option><option>Financeiro</option><option>Marketing</option><option>Operações</option><option>Jurídico</option><option>Diretoria</option></select>
@@ -115,6 +107,7 @@
                 <select id="f-prio"><option>Normal</option><option>Alta</option><option>Urgente</option></select>
               </div>
               <div class="fg"><label>Data necessária</label><input type="date" id="f-data"/></div>
+              <div class="fg"><label>Sessão autenticada</label><div class="session-pill">Logado como <strong id="f-email-display">—</strong></div></div>
               <div class="fg span2"><label>Justificativa detalhada</label><textarea id="f-just" placeholder="Descreva o motivo, impacto e benefícios desta compra..."></textarea></div>
             </div>
           </div>
@@ -145,7 +138,8 @@
       <!-- ── APROVAÇÃO ── -->
       <div class="page" id="page-aprovacao">
         <div class="toast toast-ok" id="toast-aprov"></div>
-        <div class="loading show" id="aprov-loading"><div class="spin"></div>Carregando pendências...</div>
+        <div class="toast toast-err" id="toast-aprov-err"></div>
+        <div class="loading" id="aprov-loading"><div class="spin"></div>Carregando pendências...</div>
         <div id="aprov-list"></div>
         <div id="aprov-empty" style="display:none" class="empty">
           <div class="empty-icon">✓</div>
@@ -170,49 +164,10 @@
         </div>
       </div>
 
-      <!-- ── CONFIGURAÇÃO ── -->
-      <div class="page" id="page-config">
-        <div class="config-card">
-          <div class="config-title">URL do Apps Script (API)</div>
-          <div class="config-sub">Cole aqui a URL gerada ao publicar o Apps Script como Web App. Ela será salva no navegador.</div>
-          <input class="config-url-input" id="api-url-input" placeholder="https://script.google.com/macros/s/...../exec" oninput="salvarURL()"/>
-          <div id="api-status" class="status-pill status-pend">⬤ &nbsp;Aguardando URL</div>
-          <div style="margin-top:14px;display:flex;gap:8px">
-            <button class="btn btn-sm" onclick="testarAPI()">Testar conexão</button>
-            <button class="btn btn-sm btn-primary" onclick="carregarTudo()">Conectar e carregar dados</button>
-          </div>
-        </div>
-
-        <div class="config-card">
-          <div class="config-title">Como implantar o Apps Script (passo a passo)</div>
-          <div class="config-sub">Se a URL conter <code>/a/macros/seu-dominio.com/</code> ela é <strong>restrita ao domínio</strong> e o front-end <strong>não vai funcionar</strong> sem login. Reimplante seguindo:</div>
-          <ol style="font-size:13px;line-height:1.8;color:var(--text2);padding-left:20px">
-            <li>Cole o conteúdo de <strong>Code.gs</strong> em <strong>Extensões → Apps Script → Code.gs</strong></li>
-            <li>Substitua <code>COLE_O_ID_DA_SUA_PLANILHA</code> pelo ID da sua planilha (vem na URL da planilha)</li>
-            <li>Clique em <strong>Implantar → Nova implantação</strong></li>
-            <li>Tipo: <strong>Aplicativo da Web</strong></li>
-            <li>Executar como: <strong>Eu</strong> (seu e-mail)</li>
-            <li>Quem tem acesso: <strong>Qualquer pessoa</strong> (NÃO escolha "Apenas no domínio")</li>
-            <li>Copie a URL gerada — deve começar com <code>https://script.google.com/macros/s/...</code> (sem <code>/a/macros/</code>)</li>
-            <li>Cole essa URL no campo acima e clique em <strong>Testar conexão</strong></li>
-          </ol>
-        </div>
-
-        <div class="config-card">
-          <div class="config-title">Cabeçalhos da planilha</div>
-          <div class="config-sub">Na aba <strong>requisicoes</strong>, cole na célula A1:</div>
-          <div class="code-block">ID	titulo	solicitante	email	departamento	prioridade	data_necessaria	justificativa	valor_total	status	data_criacao	aprovador	observacao</div>
-          <div class="config-sub" style="margin-top:12px">Na aba <strong>usuarios</strong>, cole na célula A1 e adicione os aprovadores:</div>
-          <div class="code-block">email	nome	departamento	papel	ativo
-
-ana@empresa.com	Ana Martins	Diretoria	aprovador	sim</div>
-        </div>
-      </div>
-
     </div><!-- /content -->
   </div><!-- /main -->
 </div><!-- /shell -->
 
-<script src="app.js"></script>
+<?!= include('JavaScript'); ?>
 </body>
 </html>

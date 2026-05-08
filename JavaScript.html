@@ -1,0 +1,350 @@
+<script>
+// ══════════════════════════════════════════════════════════════
+//  ESTADO
+// ══════════════════════════════════════════════════════════════
+let todosReqs = [];
+let currentUser = null;
+
+// ══════════════════════════════════════════════════════════════
+//  RPC — promisifica google.script.run
+// ══════════════════════════════════════════════════════════════
+function rpc(method, ...args) {
+  return new Promise((resolve, reject) => {
+    const runner = google.script.run
+      .withSuccessHandler(resolve)
+      .withFailureHandler(err => reject(err));
+    runner[method].apply(runner, args);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+//  NAVEGAÇÃO
+// ══════════════════════════════════════════════════════════════
+const PAGE_TITLES = {dashboard:'Dashboard',nova:'Nova requisição',aprovacao:'Aprovações',historico:'Histórico'};
+
+function showPage(id, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  document.getElementById('page-title').textContent = PAGE_TITLES[id] || id;
+  if (el) el.classList.add('active');
+  if (id === 'historico') renderHist();
+  if (id === 'aprovacao') renderAprov();
+  if (id === 'nova') prefillForm();
+}
+
+function prefillForm() {
+  if (!currentUser) return;
+  const nameField = document.getElementById('f-nome');
+  if (!nameField.value) nameField.value = currentUser.nome || '';
+  document.getElementById('f-email-display').textContent = currentUser.email;
+  if (currentUser.departamento) {
+    const dept = document.getElementById('f-dept');
+    const opt = [...dept.options].find(o => o.value === currentUser.departamento || o.textContent === currentUser.departamento);
+    if (opt) dept.value = opt.value;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  CARREGAR DADOS
+// ══════════════════════════════════════════════════════════════
+async function carregarTudo() {
+  try {
+    if (!currentUser) {
+      currentUser = await rpc('getCurrentUser');
+      atualizarUserUI();
+    }
+    todosReqs = await rpc('listarRequisicoes');
+    renderDash(todosReqs);
+    atualizarBadge(todosReqs);
+    if (document.getElementById('page-historico').classList.contains('active')) renderHist();
+    if (document.getElementById('page-aprovacao').classList.contains('active')) renderAprov();
+  } catch (e) {
+    document.getElementById('dash-loading').classList.remove('show');
+    document.getElementById('dash-table').style.display = 'block';
+    document.getElementById('dash-tbody').innerHTML =
+      '<tr><td colspan="6" style="text-align:center;color:var(--red);padding:32px">' +
+      'Erro: ' + (e.message || e) + '</td></tr>';
+  }
+}
+
+function atualizarUserUI() {
+  const nome = currentUser.nome || currentUser.email;
+  document.getElementById('user-avatar').textContent = nome[0].toUpperCase();
+  document.getElementById('user-name').textContent = nome;
+  const role = currentUser.papel === 'aprovador'
+    ? 'Aprovador' + (currentUser.departamento ? ' · ' + currentUser.departamento : '')
+    : (currentUser.departamento || 'Solicitante');
+  document.getElementById('user-role').textContent = role;
+
+  // Esconde aba "Aprovações" pra quem não é aprovador
+  if (currentUser.papel !== 'aprovador') {
+    const navAprov = document.getElementById('nav-aprov-btn');
+    if (navAprov) navAprov.style.display = 'none';
+  }
+}
+
+function renderDash(reqs) {
+  document.getElementById('dash-loading').classList.remove('show');
+  document.getElementById('dash-table').style.display = 'block';
+
+  const meses = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  const mes = new Date().getMonth();
+  document.getElementById('m-mes').textContent = meses[mes];
+
+  const doMes = reqs.filter(r => {
+    const d = new Date(r.data_criacao);
+    return d.getMonth() === mes;
+  });
+  const pend = reqs.filter(r => r.status === 'Pendente');
+  const aprov = reqs.filter(r => r.status === 'Aprovada');
+  const valorTotal = aprov.reduce((s, r) => s + (parseFloat(r.valor_total) || 0), 0);
+
+  document.getElementById('m-total').textContent = doMes.length;
+  document.getElementById('m-pend').textContent = pend.length;
+  document.getElementById('m-aprov').textContent = aprov.length;
+  document.getElementById('m-valor').textContent = 'R$' + (valorTotal / 1000).toFixed(0) + 'k';
+
+  const tbody = document.getElementById('dash-tbody');
+  const ultimas = [...reqs].reverse().slice(0, 8);
+  if (!ultimas.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:24px">Nenhuma requisição ainda. Crie a primeira!</td></tr>';
+    return;
+  }
+  tbody.innerHTML = ultimas.map(r => `
+    <tr>
+      <td class="mono muted">#${String(r.ID).padStart(3,'0')}</td>
+      <td>${esc(r.titulo) || '—'}</td>
+      <td>${esc(r.solicitante) || '—'}</td>
+      <td class="mono">R$${parseFloat(r.valor_total||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+      <td class="muted">${formatDate(r.data_criacao)}</td>
+      <td>${tagFor(r.status)}</td>
+    </tr>`).join('');
+}
+
+function atualizarBadge(reqs) {
+  const pend = reqs.filter(r => r.status === 'Pendente').length;
+  const badge = document.getElementById('nav-badge');
+  badge.textContent = pend;
+  if (pend > 0 && currentUser && currentUser.papel === 'aprovador') {
+    badge.classList.add('show');
+  } else {
+    badge.classList.remove('show');
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  NOVA REQUISIÇÃO
+// ══════════════════════════════════════════════════════════════
+function calcTotal() {
+  let grand = 0;
+  document.querySelectorAll('#items-body tr').forEach(row => {
+    const inp = row.querySelectorAll('input');
+    const q = parseFloat(inp[1]?.value) || 0;
+    const v = parseFloat(inp[2]?.value) || 0;
+    const t = q * v;
+    grand += t;
+    const cell = row.querySelector('.row-total');
+    if (cell) cell.textContent = t > 0 ? 'R$' + t.toLocaleString('pt-BR', {minimumFractionDigits:2}) : '—';
+  });
+  document.getElementById('grand-total').textContent = 'R$ ' + grand.toLocaleString('pt-BR', {minimumFractionDigits:2});
+  return grand;
+}
+
+function novaLinhaItem() {
+  return `
+    <td><input type="text" placeholder="Descrição do item"/></td>
+    <td><input type="number" value="1" min="1" style="width:64px" oninput="calcTotal()"/></td>
+    <td><input type="number" placeholder="0,00" style="width:100px" oninput="calcTotal()"/></td>
+    <td class="row-total">—</td>
+    <td><button class="btn-rm" onclick="rmItem(this)">×</button></td>`;
+}
+
+function addItem() {
+  const tr = document.createElement('tr');
+  tr.innerHTML = novaLinhaItem();
+  document.getElementById('items-body').appendChild(tr);
+}
+
+function rmItem(btn) {
+  const rows = document.querySelectorAll('#items-body tr');
+  if (rows.length > 1) { btn.closest('tr').remove(); calcTotal(); }
+}
+
+async function enviarReq() {
+  const nome = document.getElementById('f-nome').value.trim();
+  const titulo = document.getElementById('f-titulo').value.trim();
+  const just = document.getElementById('f-just').value.trim();
+
+  if (!nome || !titulo || !just) {
+    mostrarToast('toast-nova-err', '⚠ Preencha nome, título e justificativa.');
+    return;
+  }
+
+  const valor = calcTotal();
+  const btn = document.getElementById('btn-enviar');
+  btn.textContent = 'Enviando...';
+  btn.disabled = true;
+
+  try {
+    const res = await rpc('criarRequisicao', {
+      titulo,
+      nome,
+      departamento: document.getElementById('f-dept').value,
+      prioridade: document.getElementById('f-prio').value,
+      dataNecessaria: document.getElementById('f-data').value,
+      justificativa: just,
+      valor: valor
+    });
+    mostrarToast('toast-nova', `✓ Requisição #${String(res.id).padStart(3,'0')} enviada! Aprovador notificado por e-mail.`);
+    document.getElementById('f-titulo').value = '';
+    document.getElementById('f-just').value = '';
+    document.getElementById('items-body').innerHTML = `<tr>${novaLinhaItem()}</tr>`;
+    calcTotal();
+    todosReqs = await rpc('listarRequisicoes');
+    renderDash(todosReqs);
+    atualizarBadge(todosReqs);
+  } catch (e) {
+    mostrarToast('toast-nova-err', '✕ Erro: ' + (e.message || e));
+  } finally {
+    btn.textContent = 'Enviar para aprovação →';
+    btn.disabled = false;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  APROVAÇÃO
+// ══════════════════════════════════════════════════════════════
+function renderAprov() {
+  const list = document.getElementById('aprov-list');
+  const empty = document.getElementById('aprov-empty');
+  document.getElementById('aprov-loading').classList.remove('show');
+
+  if (!currentUser || currentUser.papel !== 'aprovador') {
+    list.innerHTML = '';
+    empty.style.display = 'block';
+    empty.innerHTML = '<div class="empty-icon">🔒</div><div class="empty-title">Acesso restrito</div><div class="empty-sub">Apenas aprovadores podem ver esta página.</div>';
+    return;
+  }
+
+  const pendentes = todosReqs.filter(r => r.status === 'Pendente');
+  if (!pendentes.length) {
+    list.innerHTML = '';
+    empty.style.display = 'block';
+    empty.innerHTML = '<div class="empty-icon">✓</div><div class="empty-title">Nenhuma pendência!</div><div class="empty-sub">Todas as requisições foram analisadas.</div>';
+    return;
+  }
+  empty.style.display = 'none';
+
+  list.innerHTML = pendentes.map(r => `
+    <div class="aprov-card" id="ac-${r.ID}">
+      <div class="aprov-top">
+        <div>
+          <div class="aprov-id">#${String(r.ID).padStart(3,'0')} · ${formatDate(r.data_criacao)}</div>
+          <div class="aprov-title">${esc(r.titulo) || '—'}</div>
+        </div>
+        ${tagFor(r.status)}
+      </div>
+      <div class="aprov-meta">
+        <span>👤 ${esc(r.solicitante)} <span class="prio">(${esc(r.email||'')})</span></span>
+        <span>🏢 ${esc(r.departamento)}</span>
+        <span class="valor">R$ ${parseFloat(r.valor_total||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
+        ${r.data_necessaria ? `<span>📅 Até ${formatDate(r.data_necessaria)}</span>` : ''}
+        <span class="prio">Prio: ${esc(r.prioridade)}</span>
+      </div>
+      <div class="aprov-just">${esc(r.justificativa) || '—'}</div>
+      <div class="aprov-footer">
+        <button class="abtn abtn-ok" onclick="aprovar(${r.ID},'Aprovada')">✓ Aprovar</button>
+        <button class="abtn abtn-no" onclick="aprovar(${r.ID},'Reprovada')">✕ Reprovar</button>
+      </div>
+    </div>`).join('');
+}
+
+async function aprovar(id, status) {
+  const card = document.getElementById('ac-' + id);
+  if (card) card.classList.add('done');
+  try {
+    await rpc('atualizarStatus', id, status, '');
+    const req = todosReqs.find(r => r.ID == id);
+    if (req) req.status = status;
+    mostrarToast('toast-aprov', `✓ Requisição #${String(id).padStart(3,'0')} ${status.toLowerCase()} com sucesso.`);
+    atualizarBadge(todosReqs);
+    setTimeout(renderAprov, 800);
+  } catch (e) {
+    if (card) card.classList.remove('done');
+    mostrarToast('toast-aprov-err', '✕ Erro: ' + (e.message || e));
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  HISTÓRICO
+// ══════════════════════════════════════════════════════════════
+function renderHist() {
+  document.getElementById('hist-loading').classList.remove('show');
+  document.getElementById('hist-card').style.display = 'block';
+  filtrarHist();
+}
+
+function filtrarHist() {
+  const q = document.getElementById('srch').value.toLowerCase();
+  const fs = document.getElementById('fstatus').value;
+  const fd = document.getElementById('fdept').value;
+  const filtrado = todosReqs.filter(r =>
+    (!q || (r.titulo||'').toLowerCase().includes(q) || String(r.ID).includes(q) || (r.solicitante||'').toLowerCase().includes(q)) &&
+    (!fs || r.status === fs) &&
+    (!fd || r.departamento === fd)
+  );
+  const tbody = document.getElementById('hist-tbody');
+  if (!filtrado.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:24px">Nenhum resultado encontrado.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = [...filtrado].reverse().map(r => `
+    <tr>
+      <td class="mono muted">#${String(r.ID).padStart(3,'0')}</td>
+      <td>${esc(r.titulo)||'—'}</td>
+      <td>${esc(r.solicitante)||'—'}</td>
+      <td>${esc(r.departamento)||'—'}</td>
+      <td class="mono">R$${parseFloat(r.valor_total||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+      <td class="muted">${formatDate(r.data_criacao)}</td>
+      <td>${tagFor(r.status)}</td>
+    </tr>`).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════════════════════
+function tagFor(s) {
+  const m = {Aprovada:'aprov',Pendente:'pend',Reprovada:'reprov'};
+  const c = m[s] || 'pend';
+  return `<span class="tag tag-${c}"><span class="tag-dot"></span>${esc(s)||'—'}</span>`;
+}
+
+function formatDate(str) {
+  if (!str) return '—';
+  try { return new Date(str).toLocaleDateString('pt-BR'); } catch(e) { return str; }
+}
+
+function mostrarToast(id, msg) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 5000);
+}
+
+// Escapa HTML pra evitar XSS quando exibimos dados da planilha
+function esc(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// ══════════════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', carregarTudo);
+</script>

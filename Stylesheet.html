@@ -1,7 +1,4 @@
-/* ── CONFIGURAÇÃO DA API ── */
-/* Após publicar o Apps Script, cole a URL no app.js */
-:root { --api-url: 'COLE_SUA_URL_AQUI'; }
-
+<style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:#F7F6F3;--surface:#FFFFFF;--border:#E8E6E0;--border2:#D4D1C8;
@@ -39,7 +36,7 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 
 .sidebar-user{padding:14px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px}
 .avatar{width:34px;height:34px;border-radius:50%;background:var(--blue-bg);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--blue);flex-shrink:0;border:2px solid var(--blue-light)}
-.u-name{font-size:13px;font-weight:500;color:var(--text)}
+.u-name{font-size:13px;font-weight:500;color:var(--text);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .u-role{font-size:11px;color:var(--text3)}
 
 /* MAIN */
@@ -115,13 +112,15 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 .fg input,.fg select,.fg textarea{font-family:'DM Sans',sans-serif;font-size:13px;border:1px solid var(--border2);border-radius:8px;padding:9px 12px;background:var(--surface);color:var(--text);outline:none;transition:border .15s}
 .fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(29,111,232,.1)}
 .fg textarea{resize:vertical;min-height:82px}
+.session-pill{font-size:12px;color:var(--text3);padding:9px 12px;background:var(--bg);border-radius:8px;border:1px dashed var(--border2)}
+.session-pill strong{color:var(--text);font-weight:500}
 
 .items-wrap{padding:0 24px 16px}
 .items-label{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin:16px 0 10px}
 .items-tbl{width:100%;border-collapse:collapse;font-size:13px}
 .items-tbl th{text-align:left;padding:8px 10px;font-size:11px;color:var(--text3);font-weight:600;border-bottom:1px solid var(--border)}
 .items-tbl td{padding:5px 5px}
-.items-tbl td input{font-family:'DM Sans',monospace;font-size:12px;border:1px solid var(--border);border-radius:7px;padding:7px 9px;width:100%;background:var(--surface);color:var(--text);outline:none}
+.items-tbl td input{font-family:'DM Sans',sans-serif;font-size:12px;border:1px solid var(--border);border-radius:7px;padding:7px 9px;width:100%;background:var(--surface);color:var(--text);outline:none}
 .items-tbl td input:focus{border-color:var(--blue)}
 .row-total{padding:0 10px;font-family:'DM Mono',monospace;font-size:12px;color:var(--text3)}
 .btn-rm{border:none;background:none;cursor:pointer;color:var(--text3);font-size:18px;line-height:1;padding:4px}
@@ -144,7 +143,6 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 .abtn{padding:7px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;border:1px solid}
 .abtn-ok{background:var(--green-bg);color:var(--green);border-color:#B8DFC9}.abtn-ok:hover{background:#D4EFE0}
 .abtn-no{background:var(--red-bg);color:var(--red);border-color:#F5C6C2}.abtn-no:hover{background:#FDDAD8}
-.abtn-info{background:var(--blue-bg);color:var(--blue);border-color:var(--blue-light)}
 
 /* FILTER */
 .filter-row{display:flex;gap:10px;margin-bottom:16px}
@@ -152,22 +150,9 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 .filter-row input{flex:1}
 .filter-row input:focus,.filter-row select:focus{border-color:var(--blue)}
 
-/* CONFIG PAGE */
-.config-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px 24px;margin-bottom:16px}
-.config-title{font-size:14px;font-weight:600;margin-bottom:4px}
-.config-sub{font-size:12px;color:var(--text2);margin-bottom:16px}
-.config-url-input{width:100%;font-family:'DM Mono',monospace;font-size:12px;border:1px solid var(--border2);border-radius:8px;padding:10px 14px;background:var(--bg);color:var(--text);outline:none}
-.config-url-input:focus{border-color:var(--blue);background:var(--surface)}
-.status-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;margin-top:10px}
-.status-ok{background:var(--green-bg);color:var(--green)}
-.status-err{background:var(--red-bg);color:var(--red)}
-.status-pend{background:var(--amber-bg);color:var(--amber)}
-
-.code-block{background:#1E1E2E;border-radius:9px;padding:14px 16px;font-family:'DM Mono',monospace;font-size:11.5px;color:#CDD6F4;line-height:1.75;overflow-x:auto;margin:12px 0;white-space:pre}
-.ck{color:#CBA6F7}.cs{color:#A6E3A1}.cc{color:#585B70}.cf{color:#89B4FA}
-
 /* EMPTY STATE */
 .empty{text-align:center;padding:48px 20px;color:var(--text3)}
 .empty-icon{font-size:36px;margin-bottom:12px}
 .empty-title{font-size:14px;font-weight:500;color:var(--text2);margin-bottom:6px}
 .empty-sub{font-size:13px}
+</style>

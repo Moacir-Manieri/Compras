@@ -1,99 +1,168 @@
-// ══ CompraFácil - Apps Script API ══
-// Cole este código em: Extensões → Apps Script → Code.gs
-// Depois publique como Web App: Implantar → Nova implantação
-//   - Tipo: Aplicativo da Web
-//   - Executar como: Eu
-//   - Quem tem acesso: QUALQUER PESSOA (não use "Apenas no domínio")
-// A URL deve ficar no formato: https://script.google.com/macros/s/XXXX/exec
-// (sem o /a/macros/seu-dominio.com no meio — esse formato indica acesso restrito ao domínio)
+// ══════════════════════════════════════════════════════════════
+//  CompraFácil — Apps Script Web App
+// ══════════════════════════════════════════════════════════════
+//  IMPLANTAÇÃO (uma vez):
+//    1. Substitua SHEET_ID abaixo pelo ID da sua planilha (vem na URL)
+//    2. Crie 3 arquivos HTML neste projeto Apps Script com estes nomes
+//       exatos (sem extensão na criação): Index, Stylesheet, JavaScript
+//       e cole o conteúdo dos respectivos .html do repositório.
+//    3. Salve tudo (Ctrl+S)
+//    4. Clique em Implantar → Nova implantação
+//         Tipo: Aplicativo da Web
+//         Executar como: Eu (seu e-mail)
+//         Quem tem acesso: Qualquer pessoa em mrlit.com.br
+//    5. A URL terá formato /a/macros/mrlit.com.br/s/.../exec
+//       É a URL definitiva — quem entrar precisa de conta @mrlit.com.br.
+//
+//  PLANILHA — abas necessárias:
+//    requisicoes  → cabeçalhos:
+//      ID, titulo, solicitante, email, departamento, prioridade,
+//      data_necessaria, justificativa, valor_total, status,
+//      data_criacao, aprovador, observacao
+//    usuarios     → cabeçalhos:
+//      email, nome, departamento, papel, ativo
+//      (papel = "aprovador" para quem pode aprovar)
+//
+//  SEGURANÇA:
+//    - Google bloqueia visitantes fora de mrlit.com.br ANTES do app carregar
+//    - getEmailValidado() valida de novo no servidor (defesa em profundidade)
+//    - O e-mail registrado em cada requisição vem da sessão Google,
+//      não pode ser falsificado pelo cliente
+//    - Apenas papel="aprovador" pode mudar status (atualizarStatus checa)
+// ══════════════════════════════════════════════════════════════
 
 const SHEET_ID = 'COLE_O_ID_DA_SUA_PLANILHA';
-const ss = SpreadsheetApp.openById(SHEET_ID);
+const ALLOWED_DOMAIN = 'mrlit.com.br';
 
-function doGet(e) {
-  // Se vier payload, é uma escrita (inserir/atualizar) feita via GET para evitar CORS
-  if (e.parameter.payload) {
-    try {
-      const body = JSON.parse(e.parameter.payload);
-      const sheet = ss.getSheetByName(body.aba);
-      if (!sheet) return json({ ok: false, erro: 'Aba não encontrada' });
+// ── HTTP ────────────────────────────────────────────────────
+function doGet() {
+  return HtmlService
+    .createTemplateFromFile('Index')
+    .evaluate()
+    .setTitle('CompraFácil')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1.0')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
 
-      if (body.acao === 'inserir') {
-        sheet.appendRow(body.linha);
-        notificarEmail(body);
-        return json({ ok: true });
-      }
-      if (body.acao === 'atualizar') {
-        const dados = sheet.getDataRange().getValues();
-        const col = dados[0].indexOf(body.campo);
-        const row = dados.findIndex((r, i) => i > 0 && r[0] == body.id);
-        if (row > 0 && col >= 0) {
-          sheet.getRange(row + 1, col + 1).setValue(body.valor);
-        }
-        return json({ ok: true });
-      }
-      return json({ ok: false, erro: 'Ação desconhecida' });
-    } catch (err) {
-      return json({ ok: false, erro: err.message });
-    }
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}
+
+// ── Helpers de autenticação e leitura ──────────────────────
+function getEmailValidado() {
+  const email = (Session.getActiveUser().getEmail() || '').toLowerCase();
+  if (!email || !email.endsWith('@' + ALLOWED_DOMAIN)) {
+    throw new Error('Acesso restrito a usuários @' + ALLOWED_DOMAIN);
   }
+  return email;
+}
 
-  // Leitura normal
-  const aba = e.parameter.aba || 'requisicoes';
-  const sheet = ss.getSheetByName(aba);
-  if (!sheet) return json([]);
+function lerAba(nome) {
+  const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(nome);
+  if (!sheet) return [];
   const vals = sheet.getDataRange().getValues();
-  if (vals.length < 2) return json([]);
+  if (vals.length < 2) return [];
   const [header, ...rows] = vals;
-  return json(rows.map(r =>
+  return rows.map(r =>
     Object.fromEntries(header.map((h, i) => [h, r[i]]))
-  ));
+  );
 }
 
-function doPost(e) {
-  try {
-    const body = JSON.parse(e.postData.contents);
-    const sheet = ss.getSheetByName(body.aba);
-    if (!sheet) return json({ ok: false, erro: 'Aba não encontrada' });
+// ── RPCs públicas (chamadas via google.script.run) ─────────
+function getCurrentUser() {
+  const email = getEmailValidado();
+  const usuarios = lerAba('usuarios');
+  const u = usuarios.find(x => (x.email || '').toLowerCase() === email);
+  return {
+    email,
+    nome: u && u.nome ? u.nome : email.split('@')[0],
+    departamento: u ? u.departamento : '',
+    papel: u ? u.papel : 'solicitante'
+  };
+}
 
-    if (body.acao === 'inserir') {
-      sheet.appendRow(body.linha);
-      notificarEmail(body);
-      return json({ ok: true });
-    }
+function listarRequisicoes() {
+  getEmailValidado();
+  return lerAba('requisicoes');
+}
 
-    if (body.acao === 'atualizar') {
-      const dados = sheet.getDataRange().getValues();
-      const col = dados[0].indexOf(body.campo);
-      const row = dados.findIndex((r, i) => i > 0 && r[0] == body.id);
-      if (row > 0 && col >= 0) {
-        sheet.getRange(row + 1, col + 1).setValue(body.valor);
-      }
-      return json({ ok: true });
-    }
-    return json({ ok: false });
-  } catch (err) {
-    return json({ ok: false, erro: err.message });
+function criarRequisicao(dados) {
+  const email = getEmailValidado();
+  const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName('requisicoes');
+  if (!sheet) throw new Error('Aba "requisicoes" não encontrada');
+
+  const tabela = sheet.getDataRange().getValues();
+  const ids = tabela.slice(1).map(r => parseInt(r[0]) || 0);
+  const novoId = ids.length ? Math.max(...ids) + 1 : 1;
+
+  sheet.appendRow([
+    novoId,
+    dados.titulo,
+    dados.nome,
+    email, // do servidor — o cliente não pode forjar
+    dados.departamento,
+    dados.prioridade,
+    dados.dataNecessaria,
+    dados.justificativa,
+    Number(dados.valor || 0).toFixed(2),
+    'Pendente',
+    new Date().toISOString().slice(0, 10),
+    '',
+    ''
+  ]);
+
+  notificarAprovadores({
+    id: novoId,
+    titulo: dados.titulo,
+    nome: dados.nome,
+    dept: dados.departamento,
+    valor: Number(dados.valor || 0).toFixed(2),
+    just: dados.justificativa
+  });
+
+  return { ok: true, id: novoId };
+}
+
+function atualizarStatus(id, status, observacao) {
+  const email = getEmailValidado();
+  const usuarios = lerAba('usuarios');
+  const u = usuarios.find(x => (x.email || '').toLowerCase() === email);
+  if (!u || u.papel !== 'aprovador') {
+    throw new Error('Apenas aprovadores podem alterar o status');
   }
+
+  const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName('requisicoes');
+  const dados = sheet.getDataRange().getValues();
+  const colStatus = dados[0].indexOf('status');
+  const colAprov = dados[0].indexOf('aprovador');
+  const colObs = dados[0].indexOf('observacao');
+  const row = dados.findIndex((r, i) => i > 0 && r[0] == id);
+  if (row <= 0) throw new Error('Requisição #' + id + ' não encontrada');
+
+  if (colStatus >= 0) sheet.getRange(row + 1, colStatus + 1).setValue(status);
+  if (colAprov >= 0) sheet.getRange(row + 1, colAprov + 1).setValue(email);
+  if (colObs >= 0 && observacao) sheet.getRange(row + 1, colObs + 1).setValue(observacao);
+
+  return { ok: true };
 }
 
-function notificarEmail(body) {
+function notificarAprovadores(info) {
   try {
-    const aprovSheet = ss.getSheetByName('usuarios');
-    if (!aprovSheet) return;
-    const rows = aprovSheet.getDataRange().getValues();
-    const aprovadores = rows.filter(r => r[3] === 'aprovador').map(r => r[0]);
-    if (!aprovadores.length) return;
+    const usuarios = lerAba('usuarios');
+    const aprov = usuarios
+      .filter(u => u.papel === 'aprovador' && u.email)
+      .map(u => u.email);
+    if (!aprov.length) return;
     MailApp.sendEmail({
-      to: aprovadores.join(','),
-      subject: `[CompraFácil] Nova requisição: ${body.linha[1]}`,
-      body: `Nova requisição de ${body.linha[2]} (${body.linha[4]})\nValor: R$ ${body.linha[8]}\nJustificativa: ${body.linha[7]}`
+      to: aprov.join(','),
+      subject: '[CompraFácil] Nova requisição: ' + info.titulo,
+      body:
+        'Nova requisição #' + info.id + '\n' +
+        'Solicitante: ' + info.nome + ' (' + info.dept + ')\n' +
+        'Valor: R$ ' + info.valor + '\n' +
+        'Justificativa: ' + info.just
     });
-  } catch (e) { /* silencioso */ }
-}
-
-function json(data) {
-  return ContentService
-    .createTextOutput(JSON.stringify(data))
-    .setMimeType(ContentService.MimeType.JSON);
+  } catch (e) {
+    // silencioso — não derruba a inserção se MailApp falhar
+  }
 }
