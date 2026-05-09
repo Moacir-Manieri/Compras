@@ -63,8 +63,17 @@ function lerAba(nome) {
   const vals = sheet.getDataRange().getValues();
   if (vals.length < 2) return [];
   const [header, ...rows] = vals;
+  const tz = Session.getScriptTimeZone();
   return rows.map(r =>
-    Object.fromEntries(header.map((h, i) => [h, r[i]]))
+    Object.fromEntries(header.map((h, i) => {
+      let v = r[i];
+      // google.script.run pode retornar null se o payload tiver Date objects
+      // crus. Convertemos para string ISO (yyyy-MM-dd) pra garantir.
+      if (v instanceof Date) {
+        v = isNaN(v.getTime()) ? '' : Utilities.formatDate(v, tz, 'yyyy-MM-dd');
+      }
+      return [h, v];
+    }))
   );
 }
 

@@ -54,7 +54,8 @@ async function carregarTudo() {
       currentUser = await rpc('getCurrentUser');
       atualizarUserUI();
     }
-    todosReqs = await rpc('listarRequisicoes');
+    const reqs = await rpc('listarRequisicoes');
+    todosReqs = Array.isArray(reqs) ? reqs : [];
     renderDash(todosReqs);
     atualizarBadge(todosReqs);
     if (document.getElementById('page-historico').classList.contains('active')) renderHist();
