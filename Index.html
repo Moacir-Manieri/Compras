@@ -28,11 +28,11 @@
     <div class="nav">
       <div class="nav-group">
         <div class="nav-section">Principal</div>
-        <button class="nav-item active" onclick="showPage('dashboard',this)">
+        <button class="nav-item active" id="nav-dashboard-btn" onclick="showPage('dashboard',this)">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
           Dashboard
         </button>
-        <button class="nav-item" onclick="showPage('nova',this)">
+        <button class="nav-item" id="nav-nova-btn" onclick="showPage('nova',this)">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
           Nova requisição
         </button>
@@ -41,11 +41,11 @@
           Aprovações
           <span class="nav-badge" id="nav-badge">0</span>
         </button>
-        <button class="nav-item" onclick="showPage('historico',this)">
+        <button class="nav-item" id="nav-hist-btn" onclick="showPage('historico',this)">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
           Histórico
         </button>
-        <button class="nav-item" onclick="showPage('comprovantes',this)">
+        <button class="nav-item" id="nav-comp-btn" onclick="showPage('comprovantes',this)">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
           Comprovantes
         </button>
@@ -67,7 +67,7 @@
       <span class="page-title" id="page-title">Dashboard</span>
       <div class="topbar-right">
         <button class="btn btn-sm btn-ghost" onclick="carregarTudo()">↺ Atualizar</button>
-        <button class="btn btn-sm btn-primary" onclick="showPage('nova', document.querySelectorAll('.nav-item')[1])">+ Nova requisição</button>
+        <button class="btn btn-sm btn-primary" onclick="showPage('nova', document.getElementById('nav-nova-btn'))">+ Nova requisição</button>
       </div>
     </div>
 
@@ -98,7 +98,7 @@
         <div class="card" id="dash-table" style="display:none">
           <div class="card-header">
             <span class="card-title">Últimas requisições</span>
-            <button class="btn btn-sm btn-ghost" onclick="showPage('historico', document.querySelectorAll('.nav-item')[3])">Ver todas →</button>
+            <button class="btn btn-sm btn-ghost" onclick="showPage('historico', document.getElementById('nav-hist-btn'))">Ver todas →</button>
           </div>
           <table class="tbl">
             <thead><tr><th>ID</th><th>Título</th><th>Solicitante</th><th>Valor</th><th>Data</th><th>Status</th></tr></thead>
@@ -154,7 +154,7 @@
           </div>
           <div class="total-bar"><span class="total-label">Total</span><span class="total-val" id="grand-total">R$ 0,00</span></div>
           <div class="form-footer">
-            <button class="btn" onclick="showPage('dashboard',document.querySelectorAll('.nav-item')[0])">Cancelar</button>
+            <button class="btn" onclick="showPage('historico', document.getElementById('nav-hist-btn'))">Cancelar</button>
             <button class="btn btn-primary" id="btn-enviar" onclick="enviarReq()">Enviar para aprovação →</button>
           </div>
         </div>

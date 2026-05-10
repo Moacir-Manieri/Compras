@@ -118,14 +118,31 @@ function atualizarUserUI() {
   const nome = currentUser.nome || currentUser.email;
   document.getElementById('user-avatar').textContent = nome[0].toUpperCase();
   document.getElementById('user-name').textContent = nome;
-  const role = currentUser.papel === 'aprovador'
-    ? 'Aprovador' + (currentUser.departamento ? ' · ' + currentUser.departamento : '')
-    : (currentUser.departamento || 'Solicitante');
+
+  const isAprovador = currentUser.papel === 'aprovador';
+  const isGestor = currentUser.papel === 'gestor';
+  const podeVerTudo = isAprovador || isGestor;
+
+  // Rótulo do papel no rodapé da sidebar
+  let role;
+  if (isAprovador) role = 'Aprovador' + (currentUser.departamento ? ' · ' + currentUser.departamento : '');
+  else if (isGestor) role = 'Gestor' + (currentUser.departamento ? ' · ' + currentUser.departamento : '');
+  else role = currentUser.departamento || 'Solicitante';
   document.getElementById('user-role').textContent = role;
 
-  // Esconde aba "Aprovações" pra quem não é aprovador
-  if (currentUser.papel !== 'aprovador') {
-    const navAprov = document.getElementById('nav-aprov-btn');
+  // Controle de acesso por papel — esconde itens do menu
+  // (filtro real dos dados é feito no servidor, em listarRequisicoes)
+  const navDash = document.getElementById('nav-dashboard-btn');
+  const navAprov = document.getElementById('nav-aprov-btn');
+
+  if (!podeVerTudo) {
+    // Solicitante: sem Dashboard nem Aprovações
+    if (navDash) navDash.style.display = 'none';
+    if (navAprov) navAprov.style.display = 'none';
+    // Como o landing default é Dashboard, redireciona pra Nova requisição
+    showPage('nova', document.getElementById('nav-nova-btn'));
+  } else if (!isAprovador) {
+    // Gestor: tem Dashboard, mas não Aprovações
     if (navAprov) navAprov.style.display = 'none';
   }
 }

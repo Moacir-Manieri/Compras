@@ -23,7 +23,10 @@
 //      (itens é um JSON string: [{"descricao":"...", "qtd":1, "valor_unit":0}])
 //    usuarios     → cabeçalhos (6 colunas, A-F):
 //      email, nome, departamento, papel, ativo, telefone
-//      (papel = "aprovador" para quem pode aprovar)
+//      papel aceita 3 valores:
+//        - "aprovador" → vê tudo + aprova/reprova requisições
+//        - "gestor"    → vê tudo (Dashboard, Histórico, Comprovantes), não aprova
+//        - "solicitante" (ou vazio) → vê apenas as próprias requisições
 //
 //  SEGURANÇA:
 //    - Google bloqueia visitantes fora de mrlit.com.br ANTES do app carregar
@@ -106,8 +109,17 @@ function getCurrentUser() {
 }
 
 function listarRequisicoes() {
-  getEmailValidado();
-  return lerAba('requisicoes');
+  const email = getEmailValidado();
+  const usuarios = lerAba('usuarios');
+  const u = usuarios.find(x => (x.email || '').toLowerCase() === email);
+  const papel = u ? u.papel : 'solicitante';
+
+  const todas = lerAba('requisicoes');
+  // Filtragem por papel — feita no SERVIDOR para privacidade real
+  // (esconder no front-end não impediria abrir DevTools e ver dados)
+  if (papel === 'aprovador' || papel === 'gestor') return todas;
+  // Solicitante: só vê as próprias
+  return todas.filter(r => (r.email || '').toLowerCase() === email);
 }
 
 function criarRequisicao(dados) {
