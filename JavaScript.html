@@ -40,11 +40,54 @@ function prefillForm() {
   const nameField = document.getElementById('f-nome');
   if (!nameField.value) nameField.value = currentUser.nome || '';
   document.getElementById('f-email-display').textContent = currentUser.email;
+  const telField = document.getElementById('f-telefone');
+  if (telField && !telField.value && currentUser.telefone) telField.value = currentUser.telefone;
   if (currentUser.departamento) {
     const dept = document.getElementById('f-dept');
     const opt = [...dept.options].find(o => o.value === currentUser.departamento || o.textContent === currentUser.departamento);
     if (opt) dept.value = opt.value;
   }
+}
+
+// Coleta os itens do formulário (descricao, qtd, valor_unit) — array
+function coletarItens() {
+  const itens = [];
+  document.querySelectorAll('#items-body tr').forEach(row => {
+    const inp = row.querySelectorAll('input');
+    const descricao = (inp[0]?.value || '').trim();
+    const qtd = parseFloat(inp[1]?.value) || 0;
+    const valor_unit = parseFloat(inp[2]?.value) || 0;
+    if (descricao || qtd > 0 || valor_unit > 0) {
+      itens.push({ descricao, qtd, valor_unit });
+    }
+  });
+  return itens;
+}
+
+// Parseia o campo "itens" (JSON na planilha) em array. Tolera campo vazio.
+function parseItens(jsonStr) {
+  if (!jsonStr) return [];
+  try {
+    const parsed = JSON.parse(jsonStr);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) { return []; }
+}
+
+// Estatísticas do solicitante: requisições no mês atual + valor total
+function calcStatsSolicitante(emailSolicitante) {
+  const e = (emailSolicitante || '').toLowerCase();
+  const agora = new Date();
+  const mes = agora.getMonth(), ano = agora.getFullYear();
+  const doMes = todosReqs.filter(r => {
+    if ((r.email||'').toLowerCase() !== e) return false;
+    const d = new Date(r.data_criacao);
+    return d.getMonth() === mes && d.getFullYear() === ano;
+  });
+  return {
+    qtdMes: doMes.length,
+    valorMes: doMes.reduce((s, r) => s + (parseFloat(r.valor_total) || 0), 0),
+    qtdTotal: todosReqs.filter(r => (r.email||'').toLowerCase() === e).length
+  };
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -197,7 +240,12 @@ async function enviarReq() {
       prioridade: document.getElementById('f-prio').value,
       dataNecessaria: document.getElementById('f-data').value,
       justificativa: just,
-      valor: valor
+      valor: valor,
+      telefone: document.getElementById('f-telefone').value.trim(),
+      centroCusto: document.getElementById('f-cc').value.trim(),
+      formaPagamento: document.getElementById('f-fpag').value,
+      prazoPagamento: document.getElementById('f-ppag').value,
+      itens: coletarItens()
     });
     mostrarToast('toast-nova', `✓ Requisição #${String(res.id).padStart(3,'0')} enviada! Aprovador notificado por e-mail.`);
     document.getElementById('f-titulo').value = '';
@@ -239,28 +287,80 @@ function renderAprov() {
   }
   empty.style.display = 'none';
 
-  list.innerHTML = pendentes.map(r => `
+  list.innerHTML = pendentes.map(r => {
+    const itens = parseItens(r.itens);
+    const stats = calcStatsSolicitante(r.email);
+    const itensHtml = itens.length ? `
+      <div class="aprov-block">
+        <div class="aprov-block-label">Itens da compra</div>
+        <table class="aprov-itens">
+          <thead><tr><th>Descrição</th><th style="text-align:right">Qtd</th><th style="text-align:right">Valor unit.</th><th style="text-align:right">Total</th></tr></thead>
+          <tbody>
+            ${itens.map(it => {
+              const total = (it.qtd||0) * (it.valor_unit||0);
+              return `<tr>
+                <td>${esc(it.descricao)||'—'}</td>
+                <td style="text-align:right">${it.qtd||0}</td>
+                <td style="text-align:right">R$ ${(it.valor_unit||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+                <td style="text-align:right" class="mono">R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>` : '';
+
+    return `
     <div class="aprov-card" id="ac-${r.ID}">
       <div class="aprov-top">
         <div>
-          <div class="aprov-id">#${String(r.ID).padStart(3,'0')} · ${formatDate(r.data_criacao)}</div>
+          <div class="aprov-id">#${String(r.ID).padStart(3,'0')} · ${formatDate(r.data_criacao)} · há ${diasAtras(r.data_criacao)} dia(s)</div>
           <div class="aprov-title">${esc(r.titulo) || '—'}</div>
         </div>
         ${tagFor(r.status)}
       </div>
       <div class="aprov-meta">
-        <span>👤 ${esc(r.solicitante)} <span class="prio">(${esc(r.email||'')})</span></span>
+        <span>👤 ${esc(r.solicitante)}</span>
+        <span>📧 ${esc(r.email||'')}</span>
+        ${r.telefone ? `<span>📱 ${esc(r.telefone)}</span>` : ''}
         <span>🏢 ${esc(r.departamento)}</span>
         <span class="valor">R$ ${parseFloat(r.valor_total||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
         ${r.data_necessaria ? `<span>📅 Até ${formatDate(r.data_necessaria)}</span>` : ''}
         <span class="prio">Prio: ${esc(r.prioridade)}</span>
       </div>
-      <div class="aprov-just">${esc(r.justificativa) || '—'}</div>
+
+      <div class="aprov-grid">
+        ${r.centro_custo ? `<div><div class="aprov-block-label">Centro de custo</div><div class="aprov-block-val">${esc(r.centro_custo)}</div></div>` : ''}
+        ${r.forma_pagamento ? `<div><div class="aprov-block-label">Forma de pagamento</div><div class="aprov-block-val">${esc(r.forma_pagamento)}</div></div>` : ''}
+        ${r.prazo_pagamento ? `<div><div class="aprov-block-label">Prazo</div><div class="aprov-block-val">${esc(r.prazo_pagamento)}</div></div>` : ''}
+      </div>
+
+      ${itensHtml}
+
+      <div class="aprov-block">
+        <div class="aprov-block-label">Justificativa</div>
+        <div class="aprov-just">${esc(r.justificativa) || '—'}</div>
+      </div>
+
+      <div class="aprov-stats">
+        <span class="stats-pill">📊 ${stats.qtdMes} requisição(ões) este mês</span>
+        <span class="stats-pill">💰 R$ ${stats.valorMes.toLocaleString('pt-BR',{minimumFractionDigits:2})} no mês</span>
+        <span class="stats-pill">📋 ${stats.qtdTotal} no total</span>
+      </div>
+
       <div class="aprov-footer">
         <button class="abtn abtn-ok" onclick="aprovar(${r.ID},'Aprovada')">✓ Aprovar</button>
         <button class="abtn abtn-no" onclick="aprovar(${r.ID},'Reprovada')">✕ Reprovar</button>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
+}
+
+function diasAtras(dataStr) {
+  if (!dataStr) return '?';
+  const d = new Date(dataStr);
+  if (isNaN(d.getTime())) return '?';
+  const ms = Date.now() - d.getTime();
+  return Math.max(0, Math.floor(ms / (1000 * 60 * 60 * 24)));
 }
 
 async function aprovar(id, status) {
@@ -361,7 +461,10 @@ function renderComprovanteDetalhe() {
     <div class="comp-grid2">
       <div>
         <div class="comp-section-label">Solicitante</div>
-        <div class="comp-section-val">${esc(r.solicitante) || '—'}<br><span style="font-size:12px;color:var(--text3);font-weight:400">${esc(r.email||'')}</span></div>
+        <div class="comp-section-val">${esc(r.solicitante) || '—'}<br>
+          <span style="font-size:12px;color:var(--text3);font-weight:400">${esc(r.email||'')}</span>
+          ${r.telefone ? `<br><span style="font-size:12px;color:var(--text3);font-weight:400">${esc(r.telefone)}</span>` : ''}
+        </div>
       </div>
       <div>
         <div class="comp-section-label">Departamento</div>
@@ -383,6 +486,45 @@ function renderComprovanteDetalhe() {
         <div class="comp-section-val">${formatDate(r.data_criacao)}</div>
       </div>
     </div>
+
+    ${(r.centro_custo || r.forma_pagamento || r.prazo_pagamento) ? `
+    <div class="comp-grid3">
+      <div>
+        <div class="comp-section-label">Centro de custo</div>
+        <div class="comp-section-val">${esc(r.centro_custo) || '—'}</div>
+      </div>
+      <div>
+        <div class="comp-section-label">Forma de pagamento</div>
+        <div class="comp-section-val">${esc(r.forma_pagamento) || '—'}</div>
+      </div>
+      <div>
+        <div class="comp-section-label">Prazo</div>
+        <div class="comp-section-val">${esc(r.prazo_pagamento) || '—'}</div>
+      </div>
+    </div>` : ''}
+
+    ${(() => {
+      const itens = parseItens(r.itens);
+      if (!itens.length) return '';
+      return `
+      <div class="comp-section">
+        <div class="comp-section-label">Itens</div>
+        <table class="comp-itens-tbl">
+          <thead><tr><th>Descrição</th><th style="text-align:right">Qtd</th><th style="text-align:right">Valor unit.</th><th style="text-align:right">Total</th></tr></thead>
+          <tbody>
+            ${itens.map(it => {
+              const total = (it.qtd||0) * (it.valor_unit||0);
+              return `<tr>
+                <td>${esc(it.descricao)||'—'}</td>
+                <td style="text-align:right">${it.qtd||0}</td>
+                <td style="text-align:right">R$ ${(it.valor_unit||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+                <td style="text-align:right">R$ ${total.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+    })()}
 
     <div class="comp-section">
       <div class="comp-section-label">Justificativa</div>

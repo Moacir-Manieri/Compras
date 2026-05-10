@@ -15,12 +15,14 @@
 //       É a URL definitiva — quem entrar precisa de conta @mrlit.com.br.
 //
 //  PLANILHA — abas necessárias:
-//    requisicoes  → cabeçalhos:
+//    requisicoes  → cabeçalhos (18 colunas, A-R):
 //      ID, titulo, solicitante, email, departamento, prioridade,
 //      data_necessaria, justificativa, valor_total, status,
-//      data_criacao, aprovador, observacao
-//    usuarios     → cabeçalhos:
-//      email, nome, departamento, papel, ativo
+//      data_criacao, aprovador, observacao,
+//      telefone, centro_custo, forma_pagamento, prazo_pagamento, itens
+//      (itens é um JSON string: [{"descricao":"...", "qtd":1, "valor_unit":0}])
+//    usuarios     → cabeçalhos (6 colunas, A-F):
+//      email, nome, departamento, papel, ativo, telefone
 //      (papel = "aprovador" para quem pode aprovar)
 //
 //  SEGURANÇA:
@@ -86,7 +88,8 @@ function getCurrentUser() {
     email,
     nome: u && u.nome ? u.nome : email.split('@')[0],
     departamento: u ? u.departamento : '',
-    papel: u ? u.papel : 'solicitante'
+    papel: u ? u.papel : 'solicitante',
+    telefone: u && u.telefone ? u.telefone : ''
   };
 }
 
@@ -104,6 +107,9 @@ function criarRequisicao(dados) {
   const ids = tabela.slice(1).map(r => parseInt(r[0]) || 0);
   const novoId = ids.length ? Math.max(...ids) + 1 : 1;
 
+  // Serializa itens como JSON (cabe numa célula só, simples de ler depois)
+  const itensJson = JSON.stringify(Array.isArray(dados.itens) ? dados.itens : []);
+
   sheet.appendRow([
     novoId,
     dados.titulo,
@@ -117,7 +123,12 @@ function criarRequisicao(dados) {
     'Pendente',
     new Date().toISOString().slice(0, 10),
     '',
-    ''
+    '',
+    dados.telefone || '',
+    dados.centroCusto || '',
+    dados.formaPagamento || '',
+    dados.prazoPagamento || '',
+    itensJson
   ]);
 
   notificarAprovadores({
