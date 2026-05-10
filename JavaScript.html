@@ -80,8 +80,8 @@ function calcStatsSolicitante(emailSolicitante) {
   const mes = agora.getMonth(), ano = agora.getFullYear();
   const doMes = todosReqs.filter(r => {
     if ((r.email||'').toLowerCase() !== e) return false;
-    const d = new Date(r.data_criacao);
-    return d.getMonth() === mes && d.getFullYear() === ano;
+    const d = parseDataLocal(r.data_criacao);
+    return d && d.getMonth() === mes && d.getFullYear() === ano;
   });
   return {
     qtdMes: doMes.length,
@@ -139,8 +139,8 @@ function renderDash(reqs) {
   document.getElementById('m-mes').textContent = meses[mes];
 
   const doMes = reqs.filter(r => {
-    const d = new Date(r.data_criacao);
-    return d.getMonth() === mes;
+    const d = parseDataLocal(r.data_criacao);
+    return d && d.getMonth() === mes;
   });
   const pend = reqs.filter(r => r.status === 'Pendente');
   const aprov = reqs.filter(r => r.status === 'Aprovada');
@@ -356,11 +356,21 @@ function renderAprov() {
 }
 
 function diasAtras(dataStr) {
-  if (!dataStr) return '?';
-  const d = new Date(dataStr);
-  if (isNaN(d.getTime())) return '?';
+  const d = parseDataLocal(dataStr);
+  if (!d) return '?';
   const ms = Date.now() - d.getTime();
   return Math.max(0, Math.floor(ms / (1000 * 60 * 60 * 24)));
+}
+
+// Parseia "yyyy-MM-dd" como data local (não UTC) — evita o desvio de 1 dia
+function parseDataLocal(str) {
+  if (!str) return null;
+  if (typeof str === 'string') {
+    const m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
+  }
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? null : d;
 }
 
 async function aprovar(id, status) {
@@ -606,6 +616,13 @@ function tagFor(s) {
 
 function formatDate(str) {
   if (!str) return '—';
+  // Strings no formato yyyy-MM-dd vêm do servidor já no fuso correto.
+  // Se passarmos por new Date(), ele interpreta como UTC e desloca um dia
+  // no horário de Brasília. Formatamos a string direto.
+  if (typeof str === 'string') {
+    const m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+  }
   try { return new Date(str).toLocaleDateString('pt-BR'); } catch(e) { return str; }
 }
 
