@@ -5,6 +5,7 @@
 let todosReqs = [];
 let currentUser = null;
 let comprovanteAtivo = null; // ID da requisição sendo visualizada em detalhe
+let contasMap = {}; // { 'codigo': {descricao, orcamento_mensal, departamento, ativo} }
 
 // ══════════════════════════════════════════════════════════════
 //  RPC — promisifica google.script.run
@@ -99,6 +100,15 @@ async function carregarTudo() {
       currentUser = await rpc('getCurrentUser');
       atualizarUserUI();
     }
+    // Carrega contas (orçamentos) — silencioso se a aba não existir
+    try {
+      const contas = await rpc('listarContas');
+      contasMap = {};
+      (Array.isArray(contas) ? contas : []).forEach(c => {
+        if (c.conta) contasMap[String(c.conta).trim()] = c;
+      });
+    } catch (e) { contasMap = {}; }
+
     const reqs = await rpc('listarRequisicoes');
     todosReqs = Array.isArray(reqs) ? reqs : [];
     renderDash(todosReqs);
@@ -193,55 +203,85 @@ function renderGastosPorConta(reqs) {
   const mes = agora.getMonth(), ano = agora.getFullYear();
   document.getElementById('contas-mes').textContent = meses[mes] + '/' + ano;
 
-  // Apenas aprovadas, do mês corrente
+  // Aprovadas do mês
   const aprovadasMes = reqs.filter(r => {
     if (r.status !== 'Aprovada') return false;
     const d = parseDataLocal(r.data_criacao);
     return d && d.getMonth() === mes && d.getFullYear() === ano;
   });
 
-  // Agrupa por conta (com fallback "Sem conta")
-  const grupos = {};
-  let totalMes = 0;
+  // Agrupa gastos por conta
+  const gastos = {};
   aprovadasMes.forEach(r => {
-    const conta = (String(r.conta || '').trim() || 'Sem conta');
-    if (!grupos[conta]) grupos[conta] = { qtd: 0, valor: 0 };
-    const v = parseFloat(r.valor_total) || 0;
-    grupos[conta].qtd++;
-    grupos[conta].valor += v;
-    totalMes += v;
+    const c = String(r.conta || '').trim() || 'Sem conta';
+    if (!gastos[c]) gastos[c] = 0;
+    gastos[c] += parseFloat(r.valor_total) || 0;
+  });
+
+  // Mescla: cada conta cadastrada vira uma linha (mesmo se ainda sem gasto),
+  // e contas usadas mas não cadastradas também aparecem.
+  const linhas = {};
+  Object.entries(contasMap).forEach(([codigo, info]) => {
+    linhas[codigo] = {
+      conta: codigo,
+      descricao: info.descricao || '',
+      orcamento: parseFloat(info.orcamento_mensal) || 0,
+      gasto: 0
+    };
+  });
+  Object.entries(gastos).forEach(([codigo, valor]) => {
+    if (!linhas[codigo]) {
+      linhas[codigo] = { conta: codigo, descricao: '', orcamento: 0, gasto: 0 };
+    }
+    linhas[codigo].gasto = valor;
   });
 
   const card = document.getElementById('dash-contas');
   const tbody = document.getElementById('contas-tbody');
-  const tfoot = document.getElementById('contas-tfoot');
   card.style.display = 'block';
 
-  const linhas = Object.entries(grupos).sort((a, b) => b[1].valor - a[1].valor);
-  if (!linhas.length) {
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:20px">Nenhum gasto aprovado em ' + meses[mes] + '.</td></tr>';
-    tfoot.innerHTML = '';
+  // Ordena: alertas (% alto) primeiro, depois pelo gasto bruto
+  const ordenadas = Object.values(linhas).sort((a, b) => {
+    const pa = a.orcamento > 0 ? a.gasto / a.orcamento : -1;
+    const pb = b.orcamento > 0 ? b.gasto / b.orcamento : -1;
+    if (pa !== pb) return pb - pa;
+    return b.gasto - a.gasto;
+  });
+
+  if (!ordenadas.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:20px">Nenhuma conta cadastrada nem gasto registrado em ' + meses[mes] + '.</td></tr>';
     return;
   }
 
-  tbody.innerHTML = linhas.map(([conta, g]) => {
-    const pct = totalMes > 0 ? (g.valor / totalMes * 100) : 0;
+  tbody.innerHTML = ordenadas.map(l => {
+    const restante = l.orcamento - l.gasto;
+    const pct = l.orcamento > 0 ? (l.gasto / l.orcamento * 100) : null;
+
+    let pctCell, restanteCell;
+    if (pct === null) {
+      pctCell = '<span class="muted">sem orçamento</span>';
+      restanteCell = '<span class="muted">—</span>';
+    } else {
+      let cor = 'color:var(--green)';
+      let prefixo = '';
+      if (pct >= 100) { cor = 'color:var(--red);font-weight:700'; prefixo = '⚠ '; }
+      else if (pct >= 90) { cor = 'color:var(--red);font-weight:600'; prefixo = '⚠ '; }
+      else if (pct >= 70) { cor = 'color:var(--amber);font-weight:600'; }
+      pctCell = `<span style="${cor}">${prefixo}${pct.toFixed(1)}%</span>`;
+      const corR = restante < 0 ? 'color:var(--red);font-weight:600' : '';
+      restanteCell = `<span style="${corR}" class="mono">R$ ${restante.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>`;
+    }
+
     return `
       <tr>
-        <td>${esc(conta)}</td>
-        <td class="muted" style="text-align:right">${g.qtd}</td>
-        <td class="mono" style="text-align:right">R$ ${g.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
-        <td class="muted mono" style="text-align:right">${pct.toFixed(1)}%</td>
+        <td class="mono">${esc(l.conta)}</td>
+        <td>${esc(l.descricao) || '<span class="muted" style="font-style:italic">não cadastrada</span>'}</td>
+        <td class="mono" style="text-align:right">${l.orcamento > 0 ? 'R$ ' + l.orcamento.toLocaleString('pt-BR',{minimumFractionDigits:2}) : '<span class="muted">—</span>'}</td>
+        <td class="mono" style="text-align:right">R$ ${l.gasto.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+        <td style="text-align:right">${restanteCell}</td>
+        <td style="text-align:right">${pctCell}</td>
       </tr>`;
   }).join('');
-
-  tfoot.innerHTML = `
-    <tr style="font-weight:600;background:#FAFAF8">
-      <td>Total</td>
-      <td class="mono" style="text-align:right">${aprovadasMes.length}</td>
-      <td class="mono" style="text-align:right">R$ ${totalMes.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
-      <td style="text-align:right">100%</td>
-    </tr>`;
 }
 
 function atualizarBadge(reqs) {

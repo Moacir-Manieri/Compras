@@ -108,6 +108,18 @@ function getCurrentUser() {
   };
 }
 
+// Lista as contas cadastradas (apenas ativas). Retorna [] se a aba não existir.
+function listarContas() {
+  getEmailValidado();
+  const contas = lerAba('contas');
+  return contas.filter(c => {
+    const a = String(c.ativo || '').toLowerCase().trim();
+    // Aceita ativo se: vazio, "sim", "true", "1", "ativo"
+    // Inativo apenas com explicito: "não", "nao", "false", "0", "inativo"
+    return a !== 'não' && a !== 'nao' && a !== 'false' && a !== '0' && a !== 'inativo';
+  });
+}
+
 function listarRequisicoes() {
   const email = getEmailValidado();
   const usuarios = lerAba('usuarios');
