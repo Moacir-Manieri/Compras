@@ -19,7 +19,7 @@
 //      ID, titulo, solicitante, email, departamento, prioridade,
 //      data_necessaria, justificativa, valor_total, status,
 //      data_criacao, aprovador, observacao,
-//      telefone, centro_custo, forma_pagamento, prazo_pagamento, itens
+//      telefone, conta, forma_pagamento, prazo_pagamento, itens
 //      (itens é um JSON string: [{"descricao":"...", "qtd":1, "valor_unit":0}])
 //    usuarios     → cabeçalhos (6 colunas, A-F):
 //      email, nome, departamento, papel, ativo, telefone
@@ -125,7 +125,7 @@ function criarRequisicao(dados) {
     '',
     '',
     dados.telefone || '',
-    dados.centroCusto || '',
+    dados.conta || '',
     dados.formaPagamento || '',
     dados.prazoPagamento || '',
     itensJson

@@ -242,7 +242,7 @@ async function enviarReq() {
       justificativa: just,
       valor: valor,
       telefone: document.getElementById('f-telefone').value.trim(),
-      centroCusto: document.getElementById('f-cc').value.trim(),
+      conta: document.getElementById('f-cc').value.trim(),
       formaPagamento: document.getElementById('f-fpag').value,
       prazoPagamento: document.getElementById('f-ppag').value,
       itens: coletarItens()
@@ -329,7 +329,7 @@ function renderAprov() {
       </div>
 
       <div class="aprov-grid">
-        ${r.centro_custo ? `<div><div class="aprov-block-label">Centro de custo</div><div class="aprov-block-val">${esc(r.centro_custo)}</div></div>` : ''}
+        ${r.conta ? `<div><div class="aprov-block-label">Conta</div><div class="aprov-block-val">${esc(r.conta)}</div></div>` : ''}
         ${r.forma_pagamento ? `<div><div class="aprov-block-label">Forma de pagamento</div><div class="aprov-block-val">${esc(r.forma_pagamento)}</div></div>` : ''}
         ${r.prazo_pagamento ? `<div><div class="aprov-block-label">Prazo</div><div class="aprov-block-val">${esc(r.prazo_pagamento)}</div></div>` : ''}
       </div>
@@ -487,11 +487,11 @@ function renderComprovanteDetalhe() {
       </div>
     </div>
 
-    ${(r.centro_custo || r.forma_pagamento || r.prazo_pagamento) ? `
+    ${(r.conta || r.forma_pagamento || r.prazo_pagamento) ? `
     <div class="comp-grid3">
       <div>
-        <div class="comp-section-label">Centro de custo</div>
-        <div class="comp-section-val">${esc(r.centro_custo) || '—'}</div>
+        <div class="comp-section-label">Conta</div>
+        <div class="comp-section-val">${esc(r.conta) || '—'}</div>
       </div>
       <div>
         <div class="comp-section-label">Forma de pagamento</div>
