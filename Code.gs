@@ -66,8 +66,11 @@ function lerAba(nome) {
   if (vals.length < 2) return [];
   const [header, ...rows] = vals;
   const tz = Session.getScriptTimeZone();
-  return rows.map(r =>
-    Object.fromEntries(header.map((h, i) => {
+  // Normaliza cabeçalhos (trim, sem mudar caixa pra não quebrar leitura por nome)
+  const headersN = header.map(h => String(h || '').trim());
+
+  return rows.map(r => {
+    const obj = Object.fromEntries(headersN.map((h, i) => {
       let v = r[i];
       // google.script.run pode retornar null se o payload tiver Date objects
       // crus. Convertemos para string ISO (yyyy-MM-dd) pra garantir.
@@ -75,8 +78,17 @@ function lerAba(nome) {
         v = isNaN(v.getTime()) ? '' : Utilities.formatDate(v, tz, 'yyyy-MM-dd');
       }
       return [h, v];
-    }))
-  );
+    }));
+
+    // Alias: front-end usa r.conta. Se a planilha ainda estiver com
+    // "centro de custo" ou "centro_custo", copia o valor pra r.conta.
+    if (!obj.conta) {
+      if (obj['centro de custo']) obj.conta = obj['centro de custo'];
+      else if (obj.centro_custo) obj.conta = obj.centro_custo;
+    }
+
+    return obj;
+  });
 }
 
 // ── RPCs públicas (chamadas via google.script.run) ─────────
@@ -104,32 +116,44 @@ function criarRequisicao(dados) {
   if (!sheet) throw new Error('Aba "requisicoes" não encontrada');
 
   const tabela = sheet.getDataRange().getValues();
+  const headers = tabela[0].map(h => String(h || '').trim());
   const ids = tabela.slice(1).map(r => parseInt(r[0]) || 0);
   const novoId = ids.length ? Math.max(...ids) + 1 : 1;
 
-  // Serializa itens como JSON (cabe numa célula só, simples de ler depois)
-  const itensJson = JSON.stringify(Array.isArray(dados.itens) ? dados.itens : []);
+  // Mapa de campo → valor. Usamos os NOMES dos cabeçalhos como chaves.
+  // Inclui aliases (ex.: "centro de custo" ou "centro_custo") pra ser
+  // tolerante com cabeçalhos diferentes do esperado.
+  const valores = {
+    'ID': novoId,
+    'titulo': dados.titulo,
+    'solicitante': dados.nome,
+    'email': email,
+    'departamento': dados.departamento,
+    'prioridade': dados.prioridade,
+    'data_necessaria': dados.dataNecessaria,
+    'justificativa': dados.justificativa,
+    'valor_total': Number(dados.valor || 0).toFixed(2),
+    'status': 'Pendente',
+    'data_criacao': new Date().toISOString().slice(0, 10),
+    'aprovador': '',
+    'observacao': '',
+    'telefone': dados.telefone || '',
+    'conta': dados.conta || '',
+    'centro_custo': dados.conta || '',
+    'centro de custo': dados.conta || '',
+    'forma_pagamento': dados.formaPagamento || '',
+    'prazo_pagamento': dados.prazoPagamento || '',
+    'itens': JSON.stringify(Array.isArray(dados.itens) ? dados.itens : [])
+  };
 
-  sheet.appendRow([
-    novoId,
-    dados.titulo,
-    dados.nome,
-    email, // do servidor — o cliente não pode forjar
-    dados.departamento,
-    dados.prioridade,
-    dados.dataNecessaria,
-    dados.justificativa,
-    Number(dados.valor || 0).toFixed(2),
-    'Pendente',
-    new Date().toISOString().slice(0, 10),
-    '',
-    '',
-    dados.telefone || '',
-    dados.conta || '',
-    dados.formaPagamento || '',
-    dados.prazoPagamento || '',
-    itensJson
-  ]);
+  // Monta a linha respeitando a ordem dos cabeçalhos da planilha.
+  // Coluna sem nome correspondente fica vazia.
+  const linha = headers.map(h => {
+    if (Object.prototype.hasOwnProperty.call(valores, h)) return valores[h];
+    return '';
+  });
+
+  sheet.appendRow(linha);
 
   notificarAprovadores({
     id: novoId,
