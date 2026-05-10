@@ -546,22 +546,27 @@ function renderComprovanteDetalhe() {
       <span class="val">R$ ${valor}</span>
     </div>
 
-    <div class="comp-aprov-box">
-      <div class="comp-aprov-grid">
-        <div>
-          <div class="comp-section-label">Aprovado por</div>
-          <div class="comp-section-val">${esc(r.aprovador) || '—'}</div>
-        </div>
-        <div>
-          <div class="comp-section-label">Observação</div>
-          <div class="comp-section-val">${esc(r.observacao) || '—'}</div>
-        </div>
-      </div>
-    </div>
+    ${r.observacao ? `
+    <div class="comp-section">
+      <div class="comp-section-label">Observação do aprovador</div>
+      <div class="comp-just-box">${esc(r.observacao)}</div>
+    </div>` : ''}
 
     <div class="comp-sign">
-      <div class="comp-sign-line">Solicitante</div>
-      <div class="comp-sign-line">Aprovador</div>
+      <div class="comp-sign-block">
+        <div class="comp-sign-name">${esc(r.solicitante) || ''}</div>
+        <div class="comp-sign-line">
+          <div class="comp-sign-role">Solicitante</div>
+          <div class="comp-sign-meta">${esc(r.email) || ''}</div>
+        </div>
+      </div>
+      <div class="comp-sign-block">
+        <div class="comp-sign-name">${esc(r.aprovador) || ''}</div>
+        <div class="comp-sign-line">
+          <div class="comp-sign-role">Aprovador</div>
+          <div class="comp-sign-meta">Aprovação registrada eletronicamente</div>
+        </div>
+      </div>
     </div>
 
     <div class="comp-foot">
