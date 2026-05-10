@@ -4,6 +4,7 @@
 // ══════════════════════════════════════════════════════════════
 let todosReqs = [];
 let currentUser = null;
+let comprovanteAtivo = null; // ID da requisição sendo visualizada em detalhe
 
 // ══════════════════════════════════════════════════════════════
 //  RPC — promisifica google.script.run
@@ -31,6 +32,7 @@ function showPage(id, el) {
   if (id === 'historico') renderHist();
   if (id === 'aprovacao') renderAprov();
   if (id === 'nova') prefillForm();
+  if (id === 'comprovantes') renderComprovantes();
 }
 
 function prefillForm() {
@@ -275,6 +277,145 @@ async function aprovar(id, status) {
     if (card) card.classList.remove('done');
     mostrarToast('toast-aprov-err', '✕ Erro: ' + (e.message || e));
   }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  COMPROVANTES (requisições aprovadas — visualizar/imprimir)
+// ══════════════════════════════════════════════════════════════
+function renderComprovantes() {
+  // alterna entre lista e detalhe
+  if (comprovanteAtivo !== null) {
+    document.getElementById('comp-lista').style.display = 'none';
+    document.getElementById('comp-detalhe').style.display = 'block';
+    renderComprovanteDetalhe();
+  } else {
+    document.getElementById('comp-lista').style.display = 'block';
+    document.getElementById('comp-detalhe').style.display = 'none';
+    renderComprovantesLista();
+  }
+}
+
+function renderComprovantesLista() {
+  const q = (document.getElementById('comp-srch').value || '').toLowerCase();
+  const aprovadas = todosReqs.filter(r =>
+    r.status === 'Aprovada' &&
+    (!q || (r.titulo||'').toLowerCase().includes(q) || String(r.ID).includes(q) || (r.solicitante||'').toLowerCase().includes(q))
+  );
+  const tbody = document.getElementById('comp-tbody');
+  if (!aprovadas.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:32px">Nenhuma requisição aprovada ainda.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = [...aprovadas].reverse().map(r => `
+    <tr>
+      <td class="mono muted">#${String(r.ID).padStart(3,'0')}</td>
+      <td>${esc(r.titulo)||'—'}</td>
+      <td>${esc(r.solicitante)||'—'}</td>
+      <td>${esc(r.departamento)||'—'}</td>
+      <td class="mono">R$${parseFloat(r.valor_total||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+      <td class="muted">${formatDate(r.data_criacao)}</td>
+      <td><button class="btn btn-sm" onclick="abrirComprovante(${r.ID})">Ver</button></td>
+    </tr>`).join('');
+}
+
+function abrirComprovante(id) {
+  comprovanteAtivo = id;
+  renderComprovantes();
+}
+
+function voltarComprovantes() {
+  comprovanteAtivo = null;
+  renderComprovantes();
+}
+
+function imprimirComprovante() {
+  window.print();
+}
+
+function renderComprovanteDetalhe() {
+  const r = todosReqs.find(x => x.ID == comprovanteAtivo);
+  const area = document.getElementById('comp-area');
+  if (!r) {
+    area.innerHTML = '<div class="empty"><div class="empty-icon">⚠</div><div class="empty-title">Requisição não encontrada</div></div>';
+    return;
+  }
+  const valor = parseFloat(r.valor_total||0).toLocaleString('pt-BR',{minimumFractionDigits:2});
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  area.innerHTML = `
+    <div class="comp-h">
+      <div class="comp-h-left">
+        <div class="comp-h-title">CompraFácil</div>
+        <div class="comp-h-sub">Comprovante de requisição aprovada · mrlit.com.br</div>
+      </div>
+      <div class="comp-h-right">
+        <div class="comp-num">Nº ${String(r.ID).padStart(4,'0')}</div>
+        <div class="comp-status">Aprovada</div>
+      </div>
+    </div>
+
+    <div class="comp-section">
+      <div class="comp-section-label">Título</div>
+      <div class="comp-section-val">${esc(r.titulo) || '—'}</div>
+    </div>
+
+    <div class="comp-grid2">
+      <div>
+        <div class="comp-section-label">Solicitante</div>
+        <div class="comp-section-val">${esc(r.solicitante) || '—'}<br><span style="font-size:12px;color:var(--text3);font-weight:400">${esc(r.email||'')}</span></div>
+      </div>
+      <div>
+        <div class="comp-section-label">Departamento</div>
+        <div class="comp-section-val">${esc(r.departamento) || '—'}</div>
+      </div>
+    </div>
+
+    <div class="comp-grid3">
+      <div>
+        <div class="comp-section-label">Prioridade</div>
+        <div class="comp-section-val">${esc(r.prioridade) || 'Normal'}</div>
+      </div>
+      <div>
+        <div class="comp-section-label">Data necessária</div>
+        <div class="comp-section-val">${formatDate(r.data_necessaria)}</div>
+      </div>
+      <div>
+        <div class="comp-section-label">Data da solicitação</div>
+        <div class="comp-section-val">${formatDate(r.data_criacao)}</div>
+      </div>
+    </div>
+
+    <div class="comp-section">
+      <div class="comp-section-label">Justificativa</div>
+      <div class="comp-just-box">${esc(r.justificativa) || '—'}</div>
+    </div>
+
+    <div class="comp-valor-box">
+      <span class="label">Valor total aprovado</span>
+      <span class="val">R$ ${valor}</span>
+    </div>
+
+    <div class="comp-aprov-box">
+      <div class="comp-aprov-grid">
+        <div>
+          <div class="comp-section-label">Aprovado por</div>
+          <div class="comp-section-val">${esc(r.aprovador) || '—'}</div>
+        </div>
+        <div>
+          <div class="comp-section-label">Observação</div>
+          <div class="comp-section-val">${esc(r.observacao) || '—'}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="comp-sign">
+      <div class="comp-sign-line">Solicitante</div>
+      <div class="comp-sign-line">Aprovador</div>
+    </div>
+
+    <div class="comp-foot">
+      Documento gerado em ${hoje} · CompraFácil / mrlit.com.br
+    </div>
+  `;
 }
 
 // ══════════════════════════════════════════════════════════════
