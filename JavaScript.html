@@ -151,6 +151,8 @@ function renderDash(reqs) {
   document.getElementById('m-aprov').textContent = aprov.length;
   document.getElementById('m-valor').textContent = 'R$' + (valorTotal / 1000).toFixed(0) + 'k';
 
+  renderGastosPorConta(reqs);
+
   const tbody = document.getElementById('dash-tbody');
   const ultimas = [...reqs].reverse().slice(0, 8);
   if (!ultimas.length) {
@@ -166,6 +168,63 @@ function renderDash(reqs) {
       <td class="muted">${formatDate(r.data_criacao)}</td>
       <td>${tagFor(r.status)}</td>
     </tr>`).join('');
+}
+
+function renderGastosPorConta(reqs) {
+  const meses = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  const agora = new Date();
+  const mes = agora.getMonth(), ano = agora.getFullYear();
+  document.getElementById('contas-mes').textContent = meses[mes] + '/' + ano;
+
+  // Apenas aprovadas, do mês corrente
+  const aprovadasMes = reqs.filter(r => {
+    if (r.status !== 'Aprovada') return false;
+    const d = parseDataLocal(r.data_criacao);
+    return d && d.getMonth() === mes && d.getFullYear() === ano;
+  });
+
+  // Agrupa por conta (com fallback "Sem conta")
+  const grupos = {};
+  let totalMes = 0;
+  aprovadasMes.forEach(r => {
+    const conta = (String(r.conta || '').trim() || 'Sem conta');
+    if (!grupos[conta]) grupos[conta] = { qtd: 0, valor: 0 };
+    const v = parseFloat(r.valor_total) || 0;
+    grupos[conta].qtd++;
+    grupos[conta].valor += v;
+    totalMes += v;
+  });
+
+  const card = document.getElementById('dash-contas');
+  const tbody = document.getElementById('contas-tbody');
+  const tfoot = document.getElementById('contas-tfoot');
+  card.style.display = 'block';
+
+  const linhas = Object.entries(grupos).sort((a, b) => b[1].valor - a[1].valor);
+  if (!linhas.length) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:20px">Nenhum gasto aprovado em ' + meses[mes] + '.</td></tr>';
+    tfoot.innerHTML = '';
+    return;
+  }
+
+  tbody.innerHTML = linhas.map(([conta, g]) => {
+    const pct = totalMes > 0 ? (g.valor / totalMes * 100) : 0;
+    return `
+      <tr>
+        <td>${esc(conta)}</td>
+        <td class="muted" style="text-align:right">${g.qtd}</td>
+        <td class="mono" style="text-align:right">R$ ${g.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+        <td class="muted mono" style="text-align:right">${pct.toFixed(1)}%</td>
+      </tr>`;
+  }).join('');
+
+  tfoot.innerHTML = `
+    <tr style="font-weight:600;background:#FAFAF8">
+      <td>Total</td>
+      <td class="mono" style="text-align:right">${aprovadasMes.length}</td>
+      <td class="mono" style="text-align:right">R$ ${totalMes.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+      <td style="text-align:right">100%</td>
+    </tr>`;
 }
 
 function atualizarBadge(reqs) {
